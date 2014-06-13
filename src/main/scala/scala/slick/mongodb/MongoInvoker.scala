@@ -1,6 +1,5 @@
 package scala.slick.mongodb
 
-import scala.slick.jdbc.{JdbcBackend, Invoker}
 import scala.slick.util.CloseableIterator
 import com.mongodb.casbah.MongoCursor
 import scala.slick.common.GenericInvoker
@@ -10,7 +9,7 @@ class MongoInvoker[T](val mongoCursor: MongoCursor)(implicit converter: GetResul
 
   /** Execute the statement and return the first row of the result set wrapped
     * in Some, or None if the result set is empty. */
-  override def firstOption(implicit session: Session): Option[T] = ???
+  override def firstOption(implicit session: Session): Option[T] =
 
   /** Execute the statement and return a CloseableIterator of the converted
     * results. The iterator must either be fully read or closed explicitly.
