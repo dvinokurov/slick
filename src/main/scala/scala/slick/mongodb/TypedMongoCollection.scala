@@ -4,6 +4,7 @@ import com.mongodb.casbah.MongoCollectionBase
 import com.mongodb.{DBCollection, DBCursor}
 import scala.annotation.unchecked.uncheckedVariance
 import com.mongodb.casbah.Imports._
+import scala.slick.util.CloseableIterator
 
 
 class TypedMongoCollection[R](val mongoCollection:MongoCollection,val converter:GetResult[R]) extends MongoCollectionBase {
@@ -29,8 +30,9 @@ class TypedMongoCollection[R](val mongoCollection:MongoCollection,val converter:
    * @param fields fields to return
    * @return (Option[T]) Some() of the object found, or <code>None</code> if no such object exists
    */
-  def findOneTyped[A <% DBObject, B <% DBObject](o: A, fields: B, readPrefs: ReadPreference = getReadPreference) =
-    typed(findOne(o: DBObject, fields, readPrefs))
+  // TODO: implement - issue with read preference
+  def findOneTyped[A <% DBObject, B <% DBObject](o: A, fields: B, readPrefs: ReadPreference = getReadPreference) = ???
+//    typed(findOne(o: DBObject, fields, readPrefs))
 
   /**
    * Find an object converted to Scala type by its ID.
@@ -96,5 +98,5 @@ class TypedMongoCollection[R](val mongoCollection:MongoCollection,val converter:
   override type T = DBObject
   override def _newInstance(collection: DBCollection): MongoCollectionBase = new TypedMongoCollection[R](mongoCollection,converter)
   override def _newCursor(cursor: DBCursor): CursorType = new MongoIterator[R](new MongoCursor(cursor))(converter)
-  override type CursorType = Iterator[R @uncheckedVariance] // TODO: review if covariance may cause errors
+  override type CursorType = CloseableIterator[R @uncheckedVariance] // TODO: review if covariance may cause errors
 }
