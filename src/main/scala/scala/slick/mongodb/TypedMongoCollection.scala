@@ -9,6 +9,16 @@ import scala.slick.util.CloseableIterator
 
 class TypedMongoCollection[R](val mongoCollection:MongoCollection,val converter:GetResult[R]) extends MongoCollectionBase {
 
+
+  /**
+   * Removes objects from the database collection.
+   * @param concern WriteConcern for this operation
+   */
+  def remove[A](concern: com.mongodb.WriteConcern = getWriteConcern)(implicit dbObjView: A => DBObject,
+                                                                           encoder: DBEncoder = customEncoderFactory.map(_.create).orNull): WriteResult =
+    underlying.remove(new BasicDBObject, concern, encoder)
+
+
   /**
    * Returns a single object converted to Scala type from this collection.
    * @return (Option[R]) Some() of the object found, or <code>None</code> if this collection is empty
