@@ -1,18 +1,19 @@
 package scala.slick.mongodb
 
+import com.mongodb.casbah.Imports._
 import com.mongodb.casbah.MongoCollectionBase
 import com.mongodb.{DBCollection, DBCursor}
-import scala.annotation.unchecked.uncheckedVariance
-import com.mongodb.casbah.Imports._
-import scala.slick.util.CloseableIterator
 
+import scala.language.implicitConversions
 
+//TODO: check if R can be covariant
 class TypedMongoCollection[R](val mongoCollection:MongoCollection,val converter:GetResult[R]) extends MongoCollectionBase {
 
 
   /**
    * Removes objects from the database collection.
    * @param concern WriteConcern for this operation
+   *                TODO - Wrapper for WriteResult?
    */
   def remove[A](concern: com.mongodb.WriteConcern = getWriteConcern)(implicit dbObjView: A => DBObject,
                                                                            encoder: DBEncoder = customEncoderFactory.map(_.create).orNull): WriteResult =
@@ -107,6 +108,11 @@ class TypedMongoCollection[R](val mongoCollection:MongoCollection,val converter:
   def underlying = mongoCollection.underlying
   override type T = DBObject
   override def _newInstance(collection: DBCollection): MongoCollectionBase = new TypedMongoCollection[R](mongoCollection,converter)
-  override def _newCursor(cursor: DBCursor): CursorType = new MongoIterator[R](new MongoCursor(cursor))(converter)
-  override type CursorType = CloseableIterator[R @uncheckedVariance] // TODO: review if covariance may cause errors
+  override def _newCursor(cursor: DBCursor): CursorType = new TypedMongoCursor[R](new MongoCursor(cursor))(converter)
+  override type CursorType = TypedMongoCursor[R]
+}
+
+object TypedMongoCollection{
+  @inline implicit def typedMongoCollectionAsMongoCollection[R](t: TypedMongoCollection[R]):MongoCollection = t.mongoCollection
+  @inline implicit def typedMongoCollectionAsDBCollection[R](t: TypedMongoCollection[R]):DBCollection = t.mongoCollection.underlying
 }

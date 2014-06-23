@@ -1,9 +1,9 @@
 package scala.slick.mongodb
 
-import scala.slick.util.CloseableIterator
-import scala.slick.common.GenericInvoker
-import com.mongodb.casbah.commons.Implicits._
 import com.mongodb.DBObject
+import com.mongodb.casbah.commons.Implicits._
+
+import scala.slick.common.GenericInvoker
 
 class MongoInvoker[T](val mongoCollection: TypedMongoCollection[T],val query: Option[DBObject]) extends GenericInvoker[T]{self=>
   override type Session = MongoBackend#Session
@@ -18,14 +18,13 @@ class MongoInvoker[T](val mongoCollection: TypedMongoCollection[T],val query: Op
   /** Execute the statement and return a CloseableIterator of the converted
     * results. The iterator must either be fully read or closed explicitly.
     * @param maxRows Maximum number of rows to read from the result (0 for unlimited). */
-  override def iteratorTo(maxRows: Int)(implicit session: Session): CloseableIterator[T] = {
-    val limitedQuery = flatten(query) + (("limit",maxRows))
-    mongoCollection.find(limitedQuery)
+  override def iteratorTo(maxRows: Int)(implicit session: Session): TypedMongoCursor[T] = {
+    iterator.limit(maxRows)
   }
 
   /** Execute the statement and return a CloseableIterator of the converted
     * results. The iterator must either be fully read or closed explicitly. */
-  override def iterator(implicit session: Session): CloseableIterator[T] = query match{
+  override def iterator(implicit session: Session): TypedMongoCursor[T] = query match{
     case Some(q) => mongoCollection.find(q)
     case None => mongoCollection.find()
   }
