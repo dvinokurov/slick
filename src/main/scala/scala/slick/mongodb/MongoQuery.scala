@@ -1,9 +1,11 @@
 package scala.slick.mongodb
 
-import scala.language.implicitConversions
 import com.mongodb.DBObject
 import com.mongodb.casbah.commons.MongoDBObject
 import com.mongodb.util.JSON
+
+import scala.language.implicitConversions
+import scala.slick.mongodb.MongoInterpolation._
 
 
 // TODO: finish documentation here
@@ -23,7 +25,7 @@ import com.mongodb.util.JSON
 class MongoQuery[-P,R](val collectionName:String,val queryString: Option[String])(implicit session: MongoBackend#Session, converter: GetResult[R]) extends (P => MongoInvoker[R]){
   lazy val mongoCollection = session.collectionByName(collectionName)
 
-  private def interpolatedQuery(queryParameters: P): Option[String] = queryString.map(MongoQueryInterpolator.interpolate[P](_,queryParameters))
+  private def interpolatedQuery(queryParameters: P): Option[String] = queryString.map(interpolate[P](_,queryParameters))
 
   private def parsedQuery(queryParameters: P) = interpolatedQuery(queryParameters).map(JSON.parse(_).asInstanceOf[DBObject])
 
@@ -63,55 +65,13 @@ object MongoQuery{
   @inline implicit def DBObjectAsR[R](dbObject: DBObject)(implicit converter: GetResult[R]):R = converter(new MongoDBObject(dbObject))
 
   implicit class MongoInterpolation(val s: StringContext) extends AnyVal{
-    def mq[P](collectionName: String)(param: P) = new MongoInterpolationResult[P](collectionName,s.parts,param)
+    def mq(parameters: Any*) = new MongoInterpolationResult(s,parameters: _*)
   }
-}
 
-class MongoInterpolationResult[P](val collectionName:String,val parts: Seq[String],val param: P){
-  def as[R](implicit converter: GetResult[R], session: MongoBackend#Session): MongoQuery[Unit,R] =
-    MongoQuery[P,R](collectionName,MongoQueryInterpolator.interpolate(parts.mkString("?"),param))
-}
+  class MongoInterpolationResult(val s: StringContext,val parameters: Any*){
+    def in[R](collectionName: String)(implicit converter: GetResult[R], session: MongoBackend#Session): MongoQuery[Unit,R] =
+      MongoQuery[Seq[_], R](collectionName,s.s(new ParametersKeeper[Seq[Any]](parameters).iterator.toSeq: _*))
 
-object MongoQueryInterpolator{
-  val NO_QUOTES = 0
-  val IN_SINGLE_QUOTE = 1
-  val IN_DOUBLE_QUOTE = 2
-
-  // TODO: refactor in order to avoid iterating through all the query by a single character
-  def interpolate[P](query: String, parameters: P): String = {
-    class ParametersKeeper(val parameters: P) extends Iterable[Any] {
-      override def iterator: Iterator[Any] = parameters match {
-        case iterable:Iterable[Any] => iterable.iterator
-        case product: Product => List.range(0, product.productArity).map(product.productElement).iterator
-        case a: Any => List(a).iterator //TODO: unnecessary list creation
-      }
-    }
-
-    val params = new ParametersKeeper(parameters).iterator
-    val sb = new StringBuilder
-    var state = NO_QUOTES
-
-    val tokensIterator = query.iterator
-    while(tokensIterator.hasNext){
-      val char = tokensIterator.next()
-
-      if(char=='\'' && state==NO_QUOTES) state=IN_SINGLE_QUOTE
-      else if(char=='\'' && state==IN_SINGLE_QUOTE) state=NO_QUOTES
-      else if(char=='"' && state==NO_QUOTES) state=IN_DOUBLE_QUOTE
-      else if(char=='"' && state==IN_DOUBLE_QUOTE) state=NO_QUOTES
-
-      if(char=='?' && state==NO_QUOTES){
-        if(params.hasNext) {
-          val p = params.next()
-          if(p.isInstanceOf[Number])sb.append(p)
-          else sb.append("\"").append(p).append("\"")
-        }
-        else throw new IllegalStateException("Number of parameters is less than required by query")
-      }else{
-        sb.append(char)
-      }
-    }
-
-    sb.toString()
   }
+
 }
