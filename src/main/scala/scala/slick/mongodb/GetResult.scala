@@ -13,4 +13,7 @@ object GetResult{
   def apply[T](f: MongoDBObject => T) = new GetResult[T] {
     override def apply(v1: MongoDBObject): T = f(v1)
   }
+  def apply[T]()(implicit f: MongoDBObject => T) = new GetResult[T] {
+    override def apply(v1: MongoDBObject): T = f(v1)
+  }
 }
