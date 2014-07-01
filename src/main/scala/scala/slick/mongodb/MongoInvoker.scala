@@ -1,7 +1,6 @@
 package scala.slick.mongodb
 
 import com.mongodb.DBObject
-import com.mongodb.casbah.commons.Implicits._
 
 import scala.slick.common.GenericInvoker
 
@@ -27,11 +26,5 @@ class MongoInvoker[T](val mongoCollection: TypedMongoCollection[T],val query: Op
   override def iterator(implicit session: Session): TypedMongoCursor[T] = query match{
     case Some(q) => mongoCollection.find(q)
     case None => mongoCollection.find()
-  }
-
-
-  private def flatten(o: Option[DBObject]):DBObject = o match {
-    case Some(m) => m
-    case None => Map.empty[String,Any]
   }
 }
