@@ -1,4 +1,4 @@
-package scala.slick.mongodb
+package scala.slick.mongodb.direct
 
 import com.mongodb.DBObject
 

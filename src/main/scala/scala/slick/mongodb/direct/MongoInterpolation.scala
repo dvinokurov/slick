@@ -1,5 +1,4 @@
-package scala.slick.mongodb
-
+package scala.slick.mongodb.direct
 
 object MongoInterpolation {
 

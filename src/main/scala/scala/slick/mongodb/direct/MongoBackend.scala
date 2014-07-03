@@ -1,10 +1,11 @@
-package scala.slick.mongodb
+package scala.slick.mongodb.direct
+
+import com.mongodb.casbah.Imports._
+import com.mongodb.casbah.MongoClientURI
+import org.slf4j.LoggerFactory
 
 import scala.slick.backend.DatabaseComponent
 import scala.slick.util.SlickLogger
-import org.slf4j.LoggerFactory
-import com.mongodb.casbah.Imports._
-import com.mongodb.casbah.MongoClientURI
 
 trait MongoBackend extends DatabaseComponent{
   protected[this] lazy val statementLogger = new SlickLogger(LoggerFactory.getLogger(classOf[MongoBackend].getName+".statement"))

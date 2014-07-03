@@ -1,4 +1,4 @@
-package scala.slick.mongodb
+package scala.slick.mongodb.direct
 
 import com.mongodb.casbah.commons.MongoDBObject
 
@@ -10,10 +10,7 @@ trait GetResult[+T] extends (MongoDBObject => T) { self =>
     new GetResult[A] { def apply(MongoDBObject: MongoDBObject): A = g(self.apply(MongoDBObject)) }
 }
 object GetResult{
-  def apply[T](f: MongoDBObject => T) = new GetResult[T] {
-    override def apply(v1: MongoDBObject): T = f(v1)
-  }
-  def apply[T]()(implicit f: MongoDBObject => T) = new GetResult[T] {
+  def apply[T](implicit f: MongoDBObject => T) = new GetResult[T] {
     override def apply(v1: MongoDBObject): T = f(v1)
   }
 }
