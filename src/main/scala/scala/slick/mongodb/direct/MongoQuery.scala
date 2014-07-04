@@ -15,24 +15,24 @@ import scala.slick.mongodb.direct.MongoInterpolation._
  *
  * @param collectionName Name of the collection in the MongoDB to fetch data from
  * @param queryString Represents the query that is used to fetch data
- * @param converter Mapper from MongoDbObject to Scala object
- * @param session Implicit parameter used for connecting to the database
  * @tparam R Result type of the query
  */
 // TODO: see if we can refactor to simplify usage of converter here - probably we can use Salat to perform conversions automatically
 // TODO: check if we can make R covariant
-// TODO: remove session as a required implicit parameter. It's required for Invoker component, not Query
-class MongoQuery[-P,R](val collectionName:String,val queryString: Option[String])(implicit session: MongoBackend#Session, converter: GetResult[R]) extends (P => MongoInvoker[R]){
-  lazy val mongoCollection = session.collectionByName(collectionName)
+class MongoQuery[-P,R](val collectionName:String,val queryString: Option[String]) extends ((P,MongoBackend#Session,GetResult[R]) => MongoInvoker[R]){
 
   private def interpolatedQuery(queryParameters: P): Option[String] = queryString.map(interpolate[P](_,queryParameters))
 
   private def parsedQuery(queryParameters: P) = interpolatedQuery(queryParameters).map(JSON.parse(_).asInstanceOf[DBObject])
 
-  override def apply(queryParameters: P): MongoInvoker[R] = {
-    val typedMonoCollection = new TypedMongoCollection[R](mongoCollection,converter)
+  override def apply(queryParameters: P, session: MongoBackend#Session, converter: GetResult[R]): MongoInvoker[R] = {
+    val typedMonoCollection = new TypedMongoCollection[R](collectionName)(session,converter)
     new MongoInvoker[R](typedMonoCollection,parsedQuery(queryParameters))
   }
+
+  // Hack with swapping session and converter parameters is required to make them implicit
+  def apply(queryParameters: P)(implicit converter: GetResult[R], session: MongoBackend#Session): MongoInvoker[R] =
+    apply(queryParameters,session,converter)
 }
 
 // TODO: think how collection name may be received implicitly from result type - probably some macro required
@@ -50,15 +50,15 @@ object MongoQuery{
   def apply[P,R](collection:String,filter:String)(implicit converter: GetResult[R], session: MongoBackend#Session) = query(collection,filter)(converter,session)
 
   def query[R](collection: String)(implicit converter: GetResult[R], session: MongoBackend#Session) =
-    new MongoQuery[Unit,R](collection, None)(session, converter)
+    new MongoQuery[Unit,R](collection, None)
 
   def query[P,R](collection: String, filter: String)(implicit converter: GetResult[R], session: MongoBackend#Session) =
-    new MongoQuery[P,R](collection, Some(filter))(session, converter)
+    new MongoQuery[P,R](collection, Some(filter))
 
-  @inline implicit def mongoQueryAsInvoker[R](s: MongoQuery[Unit, R]): MongoInvoker[R] = s.apply({})
+  @inline implicit def mongoQueryAsInvoker[R](s: MongoQuery[Unit, R])(implicit session: MongoBackend#Session, converter: GetResult[R]): MongoInvoker[R] = s.apply({},session,converter)
 
-  @inline implicit def mongoQueryAsTypedMongoCollection[R](s: MongoQuery[Unit, R])(implicit converter: GetResult[R]): TypedMongoCollection[R] =
-    new TypedMongoCollection[R](s.mongoCollection,converter)
+  @inline implicit def mongoQueryAsTypedMongoCollection[R](s: MongoQuery[Unit, R])(implicit session: MongoBackend#Session, converter: GetResult[R]): TypedMongoCollection[R] =
+    new TypedMongoCollection[R](s.collectionName)(session,converter)
 
   @inline implicit def mongoDBObjectAsR[R](mongoDBObject: MongoDBObject)(implicit converter: GetResult[R]):R = converter(mongoDBObject)
 

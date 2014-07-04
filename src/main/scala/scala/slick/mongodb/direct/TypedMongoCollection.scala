@@ -7,8 +7,10 @@ import com.mongodb.{DBCollection, DBCursor}
 import scala.language.implicitConversions
 
 //TODO: check if R can be covariant
-class TypedMongoCollection[R](val mongoCollection:MongoCollection,val converter:GetResult[R]) extends MongoCollectionBase {
-
+// TODO: check if we need to move implicit GetResult parameter to findOneTyped method declarations
+// TODO: documentation
+class TypedMongoCollection[R](val mongoCollection:MongoCollection ,val converter:GetResult[R]) extends MongoCollectionBase {
+  def this(collectionName:String)(implicit session: MongoBackend#Session, converter:GetResult[R]) = this(session.collectionByName(collectionName),converter)
 
   /**
    * Removes objects from the database collection.
