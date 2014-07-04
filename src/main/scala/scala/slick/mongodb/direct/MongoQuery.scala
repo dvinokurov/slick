@@ -49,13 +49,13 @@ object MongoQuery{
 
   def apply[P,R](collection:String,filter:String)(implicit converter: GetResult[R], session: MongoBackend#Session) = query(collection,filter)(converter,session)
 
-  private def query[R](collection: String)(implicit converter: GetResult[R], session: MongoBackend#Session) =
+  def query[R](collection: String)(implicit converter: GetResult[R], session: MongoBackend#Session) =
     new MongoQuery[Unit,R](collection, None)(session, converter)
 
   def query[P,R](collection: String, filter: String)(implicit converter: GetResult[R], session: MongoBackend#Session) =
     new MongoQuery[P,R](collection, Some(filter))(session, converter)
 
-  @inline implicit def mongoQueryAsInvoker[R](s: MongoQuery[Unit, R]): MongoInvoker[R] = s(())
+  @inline implicit def mongoQueryAsInvoker[R](s: MongoQuery[Unit, R]): MongoInvoker[R] = s.apply({})
 
   @inline implicit def mongoQueryAsTypedMongoCollection[R](s: MongoQuery[Unit, R])(implicit converter: GetResult[R]): TypedMongoCollection[R] =
     new TypedMongoCollection[R](s.mongoCollection,converter)
