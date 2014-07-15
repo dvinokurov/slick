@@ -19,6 +19,7 @@ import scala.slick.mongodb.direct.MongoInterpolation._
  */
 // TODO: see if we can refactor to simplify usage of converter here - probably we can use Salat to perform conversions automatically
 // TODO: check if we can make R covariant
+// TODO: add possibility to create queries with MongoDBObjects or Maps to avoid String parsing
 class MongoQuery[-P,R](val collectionName:String,val queryString: Option[String]) extends ((P,MongoBackend#Session,GetResult[R]) => MongoInvoker[R]){
 
   private def interpolatedQuery(queryParameters: P): Option[String] = queryString.map(interpolate[P](_,queryParameters))
@@ -26,8 +27,8 @@ class MongoQuery[-P,R](val collectionName:String,val queryString: Option[String]
   private def parsedQuery(queryParameters: P) = interpolatedQuery(queryParameters).map(JSON.parse(_).asInstanceOf[DBObject])
 
   override def apply(queryParameters: P, session: MongoBackend#Session, converter: GetResult[R]): MongoInvoker[R] = {
-    val typedMonoCollection = new TypedMongoCollection[R](collectionName)(session,converter)
-    new MongoInvoker[R](typedMonoCollection,parsedQuery(queryParameters))
+    val typedMongoCollection = new TypedMongoCollection[R](collectionName)(session,converter)
+    new MongoInvoker[R](typedMongoCollection,parsedQuery(queryParameters))
   }
 
   // Hack with swapping session and converter parameters is required to make them implicit
@@ -45,15 +46,14 @@ class MongoQuery[-P,R](val collectionName:String,val queryString: Option[String]
 // which is also useful when you don't want to apply any filters
 object MongoQuery{
 
-  def apply[R](collection:String)(implicit converter: GetResult[R], session: MongoBackend#Session) = query(collection)(converter,session)
+  //TODO: check if static apply method conflicts with apply method of the MongoQuery instance
+  def apply[R](collection:String) = query[R](collection)
 
-  def apply[P,R](collection:String,filter:String)(implicit converter: GetResult[R], session: MongoBackend#Session) = query(collection,filter)(converter,session)
+  def apply[P,R](collection:String,filter:String) = query[P,R](collection,filter)
 
-  def query[R](collection: String)(implicit converter: GetResult[R], session: MongoBackend#Session) =
-    new MongoQuery[Unit,R](collection, None)
+  def query[R](collection: String) = new MongoQuery[Unit,R](collection, None)
 
-  def query[P,R](collection: String, filter: String)(implicit converter: GetResult[R], session: MongoBackend#Session) =
-    new MongoQuery[P,R](collection, Some(filter))
+  def query[P,R](collection: String, filter: String) = new MongoQuery[P,R](collection, Some(filter))
 
   @inline implicit def mongoQueryAsInvoker[R](s: MongoQuery[Unit, R])(implicit session: MongoBackend#Session, converter: GetResult[R]): MongoInvoker[R] = s.apply({},session,converter)
 
@@ -69,9 +69,8 @@ object MongoQuery{
   }
 
   class MongoInterpolationResult(val s: StringContext,val parameters: Any*){
-    def in[R](collectionName: String)(implicit converter: GetResult[R], session: MongoBackend#Session): MongoQuery[Unit,R] =
-      MongoQuery[Seq[_], R](collectionName,s.s(new ParametersKeeper[Seq[Any]](parameters).iterator.toSeq: _*))
-
+    def in[R](collectionName: String): MongoQuery[Unit,R] =
+      MongoQuery.query[Unit, R](collectionName,s.s(new ParametersKeeper[Seq[Any]](parameters).iterator.toSeq: _*))
   }
 
 }
