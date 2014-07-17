@@ -1,6 +1,7 @@
 package scala.slick.mongodb.direct
 
 import com.mongodb.DBObject
+import com.mongodb.util.JSON
 
 import scala.slick.common.GenericInvoker
 
@@ -27,4 +28,21 @@ class MongoInvoker[T](val mongoCollection: TypedMongoCollection[T],val query: Op
     case Some(q) => mongoCollection.find(q)
     case None => mongoCollection.find()
   }
+}
+object MongoInvoker{
+  def apply[P,R](collectionName: String, queryString: Option[String],queryParameters: Option[P])
+                (implicit session: MongoBackend#Session, converter: GetResult[R]): MongoInvoker[R] = {
+    val typedMongoCollection = new TypedMongoCollection[R](collectionName)(session,converter)
+    new MongoInvoker[R](typedMongoCollection,parsedQuery(queryString,queryParameters))
+  }
+
+  import scala.slick.mongodb.direct.MongoInterpolation._
+  private def interpolatedQuery[P](queryString:Option[String], queryParameters: Option[P]): Option[String] = queryParameters match{
+    case Some(parameters) => queryString.map(interpolate[P](_,parameters))
+    case None => queryString
+  }
+
+  private def parsedQuery[P](queryString: Option[String],queryParameters: Option[P]) =
+    interpolatedQuery[P](queryString,queryParameters).map(JSON.parse(_).asInstanceOf[DBObject])
+
 }
