@@ -9,7 +9,6 @@ import scala.slick.mongodb.direct.{TypedMongoCollection, MongoBackend, MongoInvo
 
 // TODO: consider case when number of fields > 22 and Tuples are not applicable
 // TODO: provide overriding possibility for _id
-//abstract class Document[+W](val collectionName: String) {
 abstract class Document(val collectionName: String) {
   import scala.slick.mongodb.lifted.Document._
   def _id = value[ObjectId]("_id")
@@ -45,7 +44,7 @@ object DocumentQuery {
   def converter[T <: Document](documentQuery: DocumentQuery[T]): GetResult[Product] = {
     val fields = documentQuery.document.*
     fields match {
-      case (f1: InnerDocument[_], f2: InnerDocument[_]) => GetResult[Product](mongoDBObject => (mongoDBObject.get(f1.name).asInstanceOf[f1.Wrapped],mongoDBObject.get(f1.name).asInstanceOf[f1.Wrapped]))
+      case (f1: InnerDocument[_], f2: InnerDocument[_]) => GetResult[Product](mongoDBObject => (mongoDBObject.get(f1.name).get.asInstanceOf[f1.Wrapped],mongoDBObject.get(f2.name).get.asInstanceOf[f2.Wrapped]))
     }
   }
 
@@ -62,13 +61,8 @@ object DocumentQuery {
   def applyMacroImpl[T <: Document](c: Context)(implicit e: c.WeakTypeTag[T]): c.Expr[DocumentQuery[T]] = {
     import c.universe._
     c.Expr[DocumentQuery[T]](
-      // instance is created to retrieve the `collectionName` for specific subclass of `Document`:
-      // val instance = new T()
-      // new DocumentQuery[T](instance)
-      Block(
-        List(ValDef(Modifiers(), newTermName("instance"), TypeTree(), Apply(Select(New(TypeTree(e.tpe)), nme.CONSTRUCTOR), List()))),
-        Apply(Select(New(AppliedTypeTree(Ident(newTypeName("DocumentQuery")), List(TypeTree(e.tpe)))), nme.CONSTRUCTOR), List(Ident(newTermName("instance"))))
-      )
+      // new DocumentQuery[T](new T())
+      Apply(Select(New(AppliedTypeTree(Ident(newTypeName("DocumentQuery")), List(TypeTree(e.tpe)))), nme.CONSTRUCTOR), List(Apply(Select(New(TypeTree(e.tpe)), nme.CONSTRUCTOR), List())))
     )
   }
 }
