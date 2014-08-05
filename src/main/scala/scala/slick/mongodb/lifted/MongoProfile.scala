@@ -6,8 +6,8 @@ import scala.slick.compiler.QueryCompiler
 import scala.slick.mongodb.direct.MongoBackend
 import scala.slick.profile.{RelationalDriver, RelationalProfile}
 
-// TODO: split into traits: InvokerComponent, ExecutorConponent etc.
-class MongoProfile extends RelationalProfile with MongoInsertInvokerComponent with MongoTypesComponent{ driver: MongoDriver =>
+// TODO: split into traits
+trait MongoProfile extends RelationalProfile with MongoInsertInvokerComponent with MongoTypesComponent{ driver: MongoDriver =>
 
   override type Backend = MongoBackend
   override val backend: Backend = MongoBackend
@@ -16,8 +16,10 @@ class MongoProfile extends RelationalProfile with MongoInsertInvokerComponent wi
   override val simple: SimpleQL = new super.SimpleQL with Implicits {}  //todo: make a separate class?
 
 
+  // TODO: extend for complicated node structure, probably mongodb nodes should be used
   /** (Partially) compile an AST for insert operations */
-  override def compileInsert(n: Node): CompiledInsert = ???
+  override def compileInsert(n: Node): CompiledInsert = n
+
   /** The compiler used for queries */
   override def queryCompiler: QueryCompiler = ???
   /** The compiler used for updates */
@@ -28,22 +30,21 @@ class MongoProfile extends RelationalProfile with MongoInsertInvokerComponent wi
   override def insertCompiler: QueryCompiler = ???
 
 
-  //TODO: implement
   trait ImplicitColumnTypes extends super.ImplicitColumnTypes{
-    override implicit def charColumnType: BaseColumnType[Char] = ???
-    override implicit def longColumnType: BaseColumnType[Long] with NumericTypedType = ???
-    override implicit def byteColumnType: BaseColumnType[Byte] with NumericTypedType = ???
-    override implicit def intColumnType: BaseColumnType[Int] with NumericTypedType = ???
-    override implicit def booleanColumnType: BaseColumnType[Boolean] = ???
-    override implicit def shortColumnType: BaseColumnType[Short] with NumericTypedType = ???
-    override implicit def doubleColumnType: BaseColumnType[Double] with NumericTypedType = ???
-    override implicit def bigDecimalColumnType: BaseColumnType[BigDecimal] with NumericTypedType = ???
-    override implicit def floatColumnType: BaseColumnType[Float] with NumericTypedType = ???
-    override implicit def stringColumnType: BaseColumnType[String] = ???
+    override implicit def charColumnType: BaseColumnType[Char] = ScalaBaseType.charType
+    override implicit def longColumnType: BaseColumnType[Long] with NumericTypedType = ScalaBaseType.longType
+    override implicit def byteColumnType: BaseColumnType[Byte] with NumericTypedType = ScalaBaseType.byteType
+    override implicit def intColumnType: BaseColumnType[Int] with NumericTypedType = ScalaBaseType.intType
+    override implicit def booleanColumnType: BaseColumnType[Boolean] = ScalaBaseType.booleanType
+    override implicit def shortColumnType: BaseColumnType[Short] with NumericTypedType = ScalaBaseType.shortType
+    override implicit def doubleColumnType: BaseColumnType[Double] with NumericTypedType = ScalaBaseType.doubleType
+    override implicit def bigDecimalColumnType: BaseColumnType[BigDecimal] with NumericTypedType = ScalaBaseType.bigDecimalType
+    override implicit def floatColumnType: BaseColumnType[Float] with NumericTypedType = ScalaBaseType.floatType
+    override implicit def stringColumnType: BaseColumnType[String] = ScalaBaseType.stringType
   }
 
   trait Implicits extends super.Implicits with ImplicitColumnTypes{
-    override implicit def ddlToDDLInvoker(d: SchemaDescription): DDLInvoker = throw new UnsupportedOperationException("Mongo driver doesn't support ddl operations.")
+    override implicit def ddlToDDLInvoker(d: SchemaDescription): DDLInvoker = createDDLInvoker(d)
   }
 
   // TODO: not required for MongoDB:
@@ -63,7 +64,8 @@ class MongoProfile extends RelationalProfile with MongoInsertInvokerComponent wi
 
 // TODO: make it a class?
 trait MongoDriver extends MongoProfile with RelationalDriver {
-  override val profile: RelationalProfile = this
+  override val profile: MongoProfile = this
 }
+object MongoDriver extends MongoDriver
 
 
