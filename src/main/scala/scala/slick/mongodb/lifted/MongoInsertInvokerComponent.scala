@@ -4,14 +4,11 @@ package scala.slick.mongodb.lifted
 import com.mongodb.casbah.Imports._
 
 import scala.annotation.implicitNotFound
+import scala.language.implicitConversions
 import scala.slick.ast._
-import scala.slick.mongodb.direct.{GetResult, TypedMongoCollection}
 import scala.slick.profile.BasicInsertInvokerComponent
 
-import scala.language.implicitConversions
-
 trait MongoInsertInvokerComponent extends BasicInsertInvokerComponent{ driver: MongoDriver =>
-  // TODO: generify: InsertInvoker -> InsertInvoker[T]
   override type InsertInvoker[T] = InsertInvokerDef[T]
 
   /** Create an InsertInvoker -- this method should be implemented by drivers as needed */
@@ -20,38 +17,13 @@ trait MongoInsertInvokerComponent extends BasicInsertInvokerComponent{ driver: M
 
   // TODO: use mongo-specific nodes, add support for nested document structure
   @implicitNotFound("Implicit converter of type ${T}=>DBObject required for MongoDB InsertInvoker")
-  class InsertInvokerDef[T](val node: CompiledInsert) extends super.InsertInvokerDef[T] {
-    /** Used to convert data from DBObject to specified type after find operation - required for TypedMongoCollection creation */
-    val converter: GetResult[(Int,String)] =
-      GetResult[(Int,String)](r => (r.get(attributeNames(0)).asInstanceOf[Int],r.get(attributeNames(1)).asInstanceOf[String]))
+  final class InsertInvokerDef[T](val node: CompiledInsert) extends super.InsertInvokerDef[T] with MongoLiftedInvoker[T] {
+    override def query = node
+
     /** Used to convert specified type to DBObject */
-    val binder: ((Int,String)) => MongoDBObject = { t: (Int,String) =>
-      val a = attributeNames
-      MongoDBObject(List((a(0),t._1),(a(1),t._2)))
-    }
-
-    /** Used to retrieve attribute names from the query (CompiledInsert) */
-    private def attributeNames: Seq[String] = node match {
-      case TableExpansion(_,_,pn: ProductNode) =>
-        pn.nodeChildren.map(_.asInstanceOf[Select].field.name)
-//        println(s"types: ${nodes(0).getClass},${nodes(1).getClass}")
-//        (nodes(0).asInstanceOf[Select].field.name,nodes(1).asInstanceOf[Select].field.name)
-    }
-
-    // Collection requires session to be instantiated, so we have to use var+def instead of lazy val here for lazy initialization
-    private def collection(session: Backend#Session) = cachedCollection match{
-      case Some(c) => c
-      case None =>
-        cachedCollection = Some(newCollection(session))
-        cachedCollection.get
-    }
-    private var cachedCollection: Option[TypedMongoCollection[(Int,String)]] = None
-    // TODO: generify, use mongo-specific nodes
-    private def newCollection(session: Backend#Session): TypedMongoCollection[(Int,String)] = node match{
-      case te: TableExpansion =>
-        val collectionName = te.table.asInstanceOf[TableNode].tableName
-        new TypedMongoCollection[(Int,String)](collectionName)(session,converter)
-      case _ => throw new IllegalArgumentException("Only nodes of type TableExpansion supported")
+    val binder: Product => MongoDBObject = { p: Product =>
+      val pairs: List[(String,Any)] = (attributeNames.iterator zip p.productIterator).toList
+      MongoDBObject(pairs)
     }
 
     // TODO: should we use Unit as a write result instead of Mongo driver results?
@@ -60,11 +32,11 @@ trait MongoInsertInvokerComponent extends BasicInsertInvokerComponent{ driver: M
 
     /** Insert a single value */
     override def +=(value: T)(implicit session: Backend#Session): SingleInsertResult =
-      collection(session).insert(binder(value.asInstanceOf[(Int,String)]))
+      collection(session).insert(binder(value.asInstanceOf[Product]))
     /** Insert a collection of values */
     override def ++=(values: Iterable[T])(implicit session: Backend#Session): MultiInsertResult = {
       val builder = collection(session).initializeOrderedBulkOperation
-      for {document <- values} builder.insert(binder(document.asInstanceOf[(Int,String)]))
+      for {document <- values} builder.insert(binder(document.asInstanceOf[Product]))
       builder.execute()
     }
   }
