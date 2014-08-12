@@ -1,14 +1,17 @@
 package scala.slick.mongodb.lifted
 
+import com.mongodb.DBObject
+
 import scala.slick.ast._
-import scala.slick.mongodb.direct.{MongoBackend, TypedMongoCollection, GetResult}
+import scala.slick.mongodb.MongoInvoker
+import scala.slick.mongodb.direct.{GetResult, MongoBackend, TypedMongoCollection}
 
 
-trait MongoLiftedInvoker[T] {
-  protected def query: Node
+trait GenericLiftedMongoInvoker[T] {
+  protected def queryNode: Node
 
   /** Used to retrieve attribute names from the query (CompiledInsert) */
-  protected def attributeNames: Seq[String] = query match {
+  protected def attributeNames: Seq[String] = queryNode match {
     case TableExpansion(_,_,pn: ProductNode) => pn.nodeChildren.map(_.asInstanceOf[Select].field.name)
     case _ => throw new IllegalArgumentException("Only nodes of type TableExpansion supported")
   }
@@ -27,10 +30,20 @@ trait MongoLiftedInvoker[T] {
   }
   private var cachedCollection: Option[TypedMongoCollection[Product]] = None
   // TODO: use mongo-specific nodes
-  private def newCollection(session: MongoBackend#Session): TypedMongoCollection[Product] = query match{
+  private def newCollection(session: MongoBackend#Session): TypedMongoCollection[Product] = queryNode match{
     case te: TableExpansion =>
       val collectionName = te.table.asInstanceOf[TableNode].tableName
       new TypedMongoCollection[Product](collectionName)(session,converter)
     case _ => throw new IllegalArgumentException("Only nodes of type TableExpansion supported")
   }
+}
+
+
+
+
+// TODO: use MongoNode
+class LiftedMongoInvoker[T](val queryNode: Node) extends MongoInvoker[T] with GenericLiftedMongoInvoker[T]{
+  // TODO: implement
+  override def mongoCollection: TypedMongoCollection[T] = ???
+  override def query: Option[DBObject] = ???
 }

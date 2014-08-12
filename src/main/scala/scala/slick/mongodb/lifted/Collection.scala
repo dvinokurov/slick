@@ -7,7 +7,7 @@ import scala.language.{higherKinds, implicitConversions}
 import scala.reflect.macros.Context
 import scala.slick.ast._
 import scala.slick.lifted.{AbstractTable, BaseTag, Column, TableQuery}
-import scala.slick.mongodb.direct.{GetResult, MongoBackend, MongoInvoker, TypedMongoCollection}
+import scala.slick.mongodb.direct.{GetResult, MongoBackend, SimpleMongoInvoker, TypedMongoCollection}
 
 // TODO: review, implement methods - not sure that BaseTag should be used as a superclass
 class DocumentTag extends BaseTag{
@@ -61,8 +61,8 @@ object CollectionQuery {
 //    }
 //  }
 
-  @inline implicit def documentQueryAsInvoker[T <: Collection[_]](dq: CollectionQuery[T])(implicit session: MongoBackend#Session): MongoInvoker[Product] =
-    MongoInvoker[Unit,Product](dq.collectionName,None,None)(session,converter(dq))
+  @inline implicit def documentQueryAsInvoker[T <: Collection[_]](dq: CollectionQuery[T])(implicit session: MongoBackend#Session): SimpleMongoInvoker[Product] =
+    SimpleMongoInvoker[Unit,Product](dq.collectionName,None,None)(session,converter(dq))
 
   @inline implicit def documentQueryAsTypedMongoCollection[T <: Collection[_]](dq: CollectionQuery[T])(implicit session: MongoBackend#Session):  TypedMongoCollection[Product] =
     new TypedMongoCollection[Product](dq.collectionName)(session,converter(dq))

@@ -6,7 +6,7 @@ import scala.slick.compiler.QueryCompiler
 import scala.slick.mongodb.direct.MongoBackend
 import scala.slick.profile.{RelationalDriver, RelationalProfile}
 
-// TODO: split into traits
+// TODO: split into traits?
 trait MongoProfile extends RelationalProfile with MongoInsertInvokerComponent with MongoTypesComponent{ driver: MongoDriver =>
 
   override type Backend = MongoBackend
@@ -45,6 +45,13 @@ trait MongoProfile extends RelationalProfile with MongoInsertInvokerComponent wi
 
   trait Implicits extends super.Implicits with ImplicitColumnTypes{
     override implicit def ddlToDDLInvoker(d: SchemaDescription): DDLInvoker = createDDLInvoker(d)
+//    implicit def queryToMongoLiftedInvoker(q: TableQuery)(implicit session: MongoBackend#Session): LiftedMongoInvoker = {
+//      val collectionName = "people"
+//      val converter =
+//      val collection = new TypedMongoCollection[Product](collectionName)(session,converter)
+//      val query =
+//      new MongoInvoker(collection,query)
+//    }
   }
 
   // TODO: not required for MongoDB:

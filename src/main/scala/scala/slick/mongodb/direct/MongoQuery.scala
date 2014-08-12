@@ -19,13 +19,13 @@ import scala.slick.mongodb.direct.MongoInterpolation._
 // TODO: see if we can refactor to simplify usage of converter here - probably we can use Salat to perform conversions automatically
 // TODO: check if we can make R covariant
 // TODO: add possibility to create queries with MongoDBObjects or Maps to avoid String parsing
-class MongoQuery[-P,R](val collectionName:String,val queryString: Option[String]) extends ((Option[P],MongoBackend#Session,GetResult[R]) => MongoInvoker[R]){
+class MongoQuery[-P,R](val collectionName:String,val queryString: Option[String]) extends ((Option[P],MongoBackend#Session,GetResult[R]) => SimpleMongoInvoker[R]){
 
-  override def apply(queryParameters: Option[P], session: MongoBackend#Session, converter: GetResult[R]): MongoInvoker[R] =
-    MongoInvoker[P,R](collectionName,queryString,queryParameters)(session,converter)
+  override def apply(queryParameters: Option[P], session: MongoBackend#Session, converter: GetResult[R]): SimpleMongoInvoker[R] =
+    SimpleMongoInvoker[P,R](collectionName,queryString,queryParameters)(session,converter)
 
   // Hack with swapping session and converter parameters is required to make them implicit
-  def apply(queryParameters: P)(implicit converter: GetResult[R], session: MongoBackend#Session): MongoInvoker[R] =
+  def apply(queryParameters: P)(implicit converter: GetResult[R], session: MongoBackend#Session): SimpleMongoInvoker[R] =
     apply(Some(queryParameters),session,converter)
 }
 
@@ -48,7 +48,7 @@ object MongoQuery{
 
   def query[P,R](collection: String, filter: String) = new MongoQuery[P,R](collection, Some(filter))
 
-  @inline implicit def mongoQueryAsInvoker[R](s: MongoQuery[Unit, R])(implicit session: MongoBackend#Session, converter: GetResult[R]): MongoInvoker[R] =
+  @inline implicit def mongoQueryAsInvoker[R](s: MongoQuery[Unit, R])(implicit session: MongoBackend#Session, converter: GetResult[R]): SimpleMongoInvoker[R] =
     s.apply(None,session,converter)
 
   @inline implicit def mongoQueryAsTypedMongoCollection[R](s: MongoQuery[Unit, R])(implicit session: MongoBackend#Session, converter: GetResult[R]): TypedMongoCollection[R] =
