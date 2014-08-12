@@ -1,8 +1,9 @@
 package scala.slick.mongodb.lifted
 
-import scala.language.implicitConversions
+import scala.language.{implicitConversions, higherKinds}
 import scala.slick.ast._
 import scala.slick.compiler.QueryCompiler
+import scala.slick.lifted.Query
 import scala.slick.mongodb.direct.MongoBackend
 import scala.slick.profile.{RelationalDriver, RelationalProfile}
 
@@ -13,7 +14,7 @@ trait MongoProfile extends RelationalProfile with MongoInsertInvokerComponent wi
   override val backend: Backend = MongoBackend
 
   override val Implicit: Implicits = new Implicits {}
-  override val simple: SimpleQL = new super.SimpleQL with Implicits {}  //todo: make a separate class?
+  override val simple: SimpleQL = new SimpleQL {}
 
 
   // TODO: extend for complicated node structure, probably mongodb nodes should be used
@@ -45,14 +46,13 @@ trait MongoProfile extends RelationalProfile with MongoInsertInvokerComponent wi
 
   trait Implicits extends super.Implicits with ImplicitColumnTypes{
     override implicit def ddlToDDLInvoker(d: SchemaDescription): DDLInvoker = createDDLInvoker(d)
-//    implicit def queryToMongoLiftedInvoker(q: TableQuery)(implicit session: MongoBackend#Session): LiftedMongoInvoker = {
-//      val collectionName = "people"
-//      val converter =
-//      val collection = new TypedMongoCollection[Product](collectionName)(session,converter)
-//      val query =
-//      new MongoInvoker(collection,query)
-//    }
+    implicit def queryToLiftedMongoInvoker[T,C[_]](q: Query[_,T,C])(implicit session: MongoBackend#Session): LiftedMongoInvoker[T] = {
+      println(s"queryToLiftedMongoInvoker: ${q.toNode}")
+      new LiftedMongoInvoker[T](q.toNode,session)
+    }
   }
+
+  trait SimpleQL extends super.SimpleQL with Implicits
 
   // TODO: not required for MongoDB:
   /** Create a DDLInvoker -- this method should be implemented by drivers as needed */

@@ -18,7 +18,7 @@ trait GenericLiftedMongoInvoker[T] {
   /** Used to convert data from DBObject to specified type after find operation - required for TypedMongoCollection creation */
   val converter: GetResult[Product] =
   // TODO: add support for arbitrary Product depending on attribute types, not only (Int,String)
-    GetResult[Product](r => (r.get(attributeNames(0)).asInstanceOf[Int],r.get(attributeNames(1)).asInstanceOf[String]))
+    GetResult[Product](r => (r.get(attributeNames(0)).get.asInstanceOf[Int],r.get(attributeNames(1)).get.asInstanceOf[String]))
 
 
   // Collection requires session to be instantiated, so we have to use var+def instead of lazy val here for lazy initialization
@@ -38,12 +38,9 @@ trait GenericLiftedMongoInvoker[T] {
   }
 }
 
-
-
-
 // TODO: use MongoNode
-class LiftedMongoInvoker[T](val queryNode: Node) extends MongoInvoker[T] with GenericLiftedMongoInvoker[T]{
-  // TODO: implement
-  override def mongoCollection: TypedMongoCollection[T] = ???
-  override def query: Option[DBObject] = ???
+class LiftedMongoInvoker[T](val queryNode: Node, val session: MongoBackend#Session) extends MongoInvoker[T] with GenericLiftedMongoInvoker[T]{
+  // TODO: make `collection(session)` return `TypedMongoCollection[T]`, not `TypedMongoCollection[Product]`
+  override def mongoCollection: TypedMongoCollection[T] = collection(session).asInstanceOf[TypedMongoCollection[T]]
+  override def query: Option[DBObject] = None //TODO: expand
 }
