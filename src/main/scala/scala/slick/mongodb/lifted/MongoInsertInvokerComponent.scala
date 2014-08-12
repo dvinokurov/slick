@@ -2,9 +2,6 @@ package scala.slick.mongodb.lifted
 
 
 import com.mongodb.casbah.Imports._
-import com.mongodb.WriteResult
-import com.mongodb.casbah.BulkWriteResult
-//import com.mongodb.casbah.commons.MongoDBObject
 
 import scala.annotation.implicitNotFound
 import scala.slick.ast._
@@ -26,22 +23,22 @@ trait MongoInsertInvokerComponent extends BasicInsertInvokerComponent{ driver: M
   class InsertInvokerDef[T](val node: CompiledInsert) extends super.InsertInvokerDef[T] {
     /** Used to convert data from DBObject to specified type after find operation - required for TypedMongoCollection creation */
     val converter: GetResult[(Int,String)] =
-      GetResult[(Int,String)](r => (r.get(attributeNames._1).asInstanceOf[Int],r.get(attributeNames._2).asInstanceOf[String]))
+      GetResult[(Int,String)](r => (r.get(attributeNames(0)).asInstanceOf[Int],r.get(attributeNames(1)).asInstanceOf[String]))
     /** Used to convert specified type to DBObject */
     val binder: ((Int,String)) => MongoDBObject = { t: (Int,String) =>
       val a = attributeNames
-      MongoDBObject(List((a._1,t._1),(a._2,t._2)))
+      MongoDBObject(List((a(0),t._1),(a(1),t._2)))
     }
 
     /** Used to retrieve attribute names from the query (CompiledInsert) */
-    private def attributeNames: (String,String) = node match {
+    private def attributeNames: Seq[String] = node match {
       case TableExpansion(_,_,pn: ProductNode) =>
-        val nodes = pn.nodeChildren.take(2).toList
-        println(s"types: ${nodes(0).getClass},${nodes(1).getClass}")
-        (nodes(0).asInstanceOf[Select].field.name,nodes(1).asInstanceOf[Select].field.name)
+        pn.nodeChildren.map(_.asInstanceOf[Select].field.name)
+//        println(s"types: ${nodes(0).getClass},${nodes(1).getClass}")
+//        (nodes(0).asInstanceOf[Select].field.name,nodes(1).asInstanceOf[Select].field.name)
     }
 
-    /** Collection requires session to be instantiated, so we have to use var+def instead of lazy val here */
+    // Collection requires session to be instantiated, so we have to use var+def instead of lazy val here for lazy initialization
     private def collection(session: Backend#Session) = cachedCollection match{
       case Some(c) => c
       case None =>
