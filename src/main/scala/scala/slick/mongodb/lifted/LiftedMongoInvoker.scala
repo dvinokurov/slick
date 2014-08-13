@@ -18,9 +18,13 @@ trait GenericLiftedMongoInvoker[T] {
   /** Used to convert data from DBObject to specified type after find operation - required for TypedMongoCollection creation */
   val converter: GetResult[Product] =
   // TODO: add support for arbitrary Product depending on attribute types, not only (Int,String)
-    GetResult[Product](r => (r.get(attributeNames(0)).get.asInstanceOf[Int],r.get(attributeNames(1)).get.asInstanceOf[String]))
+    GetResult[Product](r => (
+      r.get(attributeNames(0)).get.asInstanceOf[Int],
+      r.get(attributeNames(1)).get.asInstanceOf[String],
+      r.get(attributeNames(2)).get.asInstanceOf[Long]))
 
 
+  // TODO: check if the same invoker can be referenced by multiple threads and race condition appears
   // Collection requires session to be instantiated, so we have to use var+def instead of lazy val here for lazy initialization
   protected def collection(session: MongoBackend#Session) = cachedCollection match{
     case Some(c) => c
