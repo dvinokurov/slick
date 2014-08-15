@@ -1,6 +1,6 @@
 package scala.slick.mongodb.lifted
 
-import scala.language.{implicitConversions, higherKinds}
+import scala.language.{higherKinds, implicitConversions}
 import scala.slick.ast._
 import scala.slick.compiler.QueryCompiler
 import scala.slick.lifted.Query
@@ -21,16 +21,6 @@ trait MongoProfile extends RelationalProfile with MongoInsertInvokerComponent wi
   /** (Partially) compile an AST for insert operations */
   override def compileInsert(n: Node): CompiledInsert = n
 
-  /** The compiler used for queries */
-  override def queryCompiler: QueryCompiler = ???
-  /** The compiler used for updates */
-  override def updateCompiler: QueryCompiler = ???
-  /** The compiler used for deleting data */
-  override def deleteCompiler: QueryCompiler = ???
-  /** The compiler used for inserting data */
-  override def insertCompiler: QueryCompiler = ???
-
-
   trait ImplicitColumnTypes extends super.ImplicitColumnTypes{
     override implicit def charColumnType: BaseColumnType[Char] = ScalaBaseType.charType
     override implicit def longColumnType: BaseColumnType[Long] with NumericTypedType = ScalaBaseType.longType
@@ -46,17 +36,32 @@ trait MongoProfile extends RelationalProfile with MongoInsertInvokerComponent wi
 
   trait Implicits extends super.Implicits with ImplicitColumnTypes{
     override implicit def ddlToDDLInvoker(d: SchemaDescription): DDLInvoker = createDDLInvoker(d)
-    implicit def queryToLiftedMongoInvoker[T,C[_]](q: Query[_,T,C])(implicit session: MongoBackend#Session): LiftedMongoInvoker[T] = {
-      println(s"queryToLiftedMongoInvoker: ${q.toNode}")
-      new LiftedMongoInvoker[T](q.toNode,session)
-    }
+    implicit def queryToLiftedMongoInvoker[T,C[_]](q: Query[_,T,C])(implicit session: MongoBackend#Session): LiftedMongoInvoker[T] =
+      new LiftedMongoInvoker[T](queryCompiler.run(q.toNode).tree,session)
   }
 
-  trait SimpleQL extends super.SimpleQL with Implicits
+  trait SimpleQL extends super.SimpleQL with Implicits with MongoAliases
 
   // TODO: not required for MongoDB:
   /** Create a DDLInvoker -- this method should be implemented by drivers as needed */
   override def createDDLInvoker(ddl: SchemaDescription): DDLInvoker = throw new UnsupportedOperationException("Mongo driver doesn't support ddl operations.")
+
+  /** The compiler used for queries */
+  override def queryCompiler: QueryCompiler = {
+//    compiler -
+//      Phase.expandRecords -
+//      Phase.flattenProjections -
+//      Phase.relabelUnions -
+//      Phase.pruneFields -
+//      Phase.assignTypes
+    compiler ++ QueryCompiler.relationalPhases
+  }
+  /** The compiler used for updates */
+  override def updateCompiler: QueryCompiler = ???
+  /** The compiler used for deleting data */
+  override def deleteCompiler: QueryCompiler = ???
+  /** The compiler used for inserting data */
+  override def insertCompiler: QueryCompiler = ???
 
   override type SchemaDescription = SchemaDescriptionDef
   override def buildSequenceSchemaDescription(seq: Sequence[_]): SchemaDescription = ???

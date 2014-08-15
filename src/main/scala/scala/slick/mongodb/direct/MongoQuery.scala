@@ -18,7 +18,6 @@ import scala.slick.mongodb.direct.MongoInterpolation._
  */
 // TODO: see if we can refactor to simplify usage of converter here - probably we can use Salat to perform conversions automatically
 // TODO: check if we can make R covariant
-// TODO: add possibility to create queries with MongoDBObjects or Maps to avoid String parsing
 class MongoQuery[-P,R](val collectionName:String,val queryString: Option[String]) extends ((Option[P],MongoBackend#Session,GetResult[R]) => SimpleMongoInvoker[R]){
 
   override def apply(queryParameters: Option[P], session: MongoBackend#Session, converter: GetResult[R]): SimpleMongoInvoker[R] =
@@ -29,7 +28,7 @@ class MongoQuery[-P,R](val collectionName:String,val queryString: Option[String]
     apply(Some(queryParameters),session,converter)
 }
 
-// TODO: think how collection name may be received implicitly from result type - probably some macro required
+// TODO: think how collection name may be received implicitly from result type - some macro required
 // Example: instead of
 // Q.query[Employee]("employee","{name:John}") foreach{...}
 // I want to see

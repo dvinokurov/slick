@@ -17,7 +17,7 @@ object MongoInterpolation {
     }
   }
 
-  // TODO: refactor in order to avoid iterating through all the query by a single character
+  // TODO: check if it's possible to refactor in order to avoid iterating through all the query by a single character
   def interpolate[P](query: String, parameters: P): String = {
 
     val NO_QUOTES = 0

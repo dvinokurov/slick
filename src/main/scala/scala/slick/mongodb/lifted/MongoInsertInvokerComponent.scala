@@ -18,7 +18,7 @@ trait MongoInsertInvokerComponent extends BasicInsertInvokerComponent{ driver: M
   // TODO: use mongo-specific nodes, add support for nested document structure
   @implicitNotFound("Implicit converter of type ${T}=>DBObject required for MongoDB InsertInvoker")
   final class InsertInvokerDef[T](val node: CompiledInsert) extends super.InsertInvokerDef[T] with GenericLiftedMongoInvoker[T] {
-    println("Insert invoker created")
+    println(s"Query invoker created with node:\t$node")
     override def queryNode = node
 
     /** Used to convert specified type to DBObject */
