@@ -1,7 +1,9 @@
 package scala.slick.mongodb.lifted
 
 import com.mongodb.DBObject
+import com.mongodb.casbah.commons.MongoDBObject
 
+import scala.collection.mutable
 import scala.slick.ast._
 import scala.slick.mongodb.MongoInvoker
 import scala.slick.mongodb.direct.{GetResult, MongoBackend, TypedMongoCollection}
@@ -21,14 +23,9 @@ trait GenericLiftedMongoInvoker[T] {
 
   /** Used to convert data from DBObject to specified type after find operation - required for TypedMongoCollection creation */
   val converter: GetResult[Product] =
-  // TODO: add support for arbitrary Product depending on attribute types, not only (Int,String)
+  // TODO: add support for arbitrary type, non-tuple (single attribute)
     GetResult[Product](r => {
-//      print(attributeNames.toList)
-//      println(r)
       GenericLiftedMongoInvoker.seqToTuple(attributeNames.map(r.get(_).get))
-//      (r.get(attributeNames(0)).get,
-//        r.get(attributeNames(1)).get,
-//        r.get(attributeNames(2)).get)
     })
 
   // TODO: update in order to support client-side joins
@@ -51,9 +48,11 @@ trait GenericLiftedMongoInvoker[T] {
     case _ => throw new IllegalArgumentException("Only nodes of type TableExpansion supported")
   }
 }
+// TODO: think about better decision
 object GenericLiftedMongoInvoker{
   def seqToTuple(s:Seq[Any]):Product = s.size match {
-    case 1 => List(s(0))
+    case 0 => throw new IllegalArgumentException("Number of arguments returned may not be 0")
+    case 1 => new Tuple1[Any](s(0))
     case 2 => seqToTuple2(s)
     case 3 => seqToTuple3(s)
     case 4 => seqToTuple4(s)
@@ -75,6 +74,7 @@ object GenericLiftedMongoInvoker{
     case 20 => seqToTuple20(s)
     case 21 => seqToTuple21(s)
     case 22 => seqToTuple22(s)
+    case _ => throw new IllegalArgumentException("Only tuple query return types supported")
   }
   def seqToTuple2(s:Seq[Any]):(Any, Any) = (s(0),s(1))
   def seqToTuple3(s:Seq[Any]):(Any, Any, Any) = (s(0),s(1),s(2))
@@ -102,11 +102,67 @@ object GenericLiftedMongoInvoker{
 
 // TODO: use MongoNode
 class LiftedMongoInvoker[T](val queryNode: Node, val session: MongoBackend#Session) extends MongoInvoker[T] with GenericLiftedMongoInvoker[T]{
+  import scala.slick.mongodb.lifted.LiftedMongoInvoker._
   println(s"Query invoker created with node:\t$queryNode")
+
+
   // TODO: make `collection(session)` return `TypedMongoCollection[T]`, not `TypedMongoCollection[Product]`
-  override def mongoCollection: TypedMongoCollection[T] = collection(session).asInstanceOf[TypedMongoCollection[T]]
-  override def query: Option[DBObject] = None //TODO: expand
+  override lazy val mongoCollection: TypedMongoCollection[T] = collection(session).asInstanceOf[TypedMongoCollection[T]]
+  override lazy val query: Option[DBObject] = mongoQuery.map(_.underlying)
 
+  val comprehension = queryNode.asInstanceOf[ResultSetMapping].left
+  val mongoQuery: Option[MongoDBObject] = comprehension match {
+//  Comprehension(from,where,groupBy,orderBy,select,fetch,offset)
+    case Comprehension(from,where,None,orderBy,_,_,_) if from.size == 1 && where.isEmpty && orderBy.isEmpty => None
+    case Comprehension(from,where,None,orderBy,_,_,_) if from.size == 1 && orderBy.isEmpty =>
+      val builder = MongoDBObject.newBuilder
+      where foreach {node => addApplyArgumentsToBuilder(node,builder)}
+      val q = new MongoDBObject(builder.result())
+      println(q)
+      Some(q)
+  }
 
+  def addApplyArgumentsToBuilder(node: Node,builder: mutable.Builder[(String,Any),DBObject]): Unit =  node match {
+    case Apply(operator: Library.SqlOperator,arguments) if operator == Library.And =>
+      arguments.foreach{node => addApplyArgumentsToBuilder(node,builder)}
+    case Apply(operator: Library.SqlOperator,arguments) if supportedSQLOperators.contains(operator) =>
+      val attributeName = (arguments(0) match {case Path(an :: _)=>an}).toString
+      println(s"attributeName=$attributeName")
+      val value = arguments(1) match {case LiteralNode(v)=>v}
+      println(s"value=$value")
+      if(operator == Library.==){
+        builder += ((attributeName,value))
+      }else if(comparisonMongoOperators.contains(operator)) {
+        val comparisonOperator = SQLToMongoOperatorsMapping(operator)
+        builder += ((attributeName,MongoDBObject(comparisonOperator -> value)))
+      }
+      // TODO: add support for other operators here
+  }
 
+  // TODO: finish pagination here - skip and limit must be extracted from nodes
+//  override def iterator(implicit session: Session): TypedMongoCursor[T] = comprehension match {
+//    case Comprehension(_,_,_,_,_,Some(limit),None) => super.iterator(session).limit(limit)
+//    case Comprehension(_,_,_,_,_,None,Some(skip)) => super.iterator(session).skip(skip)
+//    case Comprehension(_,_,_,_,_,Some(limit),Some(skip)) => super.iterator(session).skip(skip).limit(limit)
+//    case _ => super.iterator(session)
+//  }
+}
+object LiftedMongoInvoker{
+  val supportedSQLOperators = List(
+    Library.<,
+    Library.<=,
+    Library.>,
+    Library.>=,
+    Library.==,
+    Library.And,
+    Library.Or
+  )
+  val comparisonMongoOperators = List(Library.<,Library.<=,Library.>,Library.>=)
+  val SQLToMongoOperatorsMapping = Map(
+    Library.< -> "$lt",
+    Library.<= -> "$lte",
+    Library.> -> "$gt",
+    Library.>= -> "$gte",
+    Library.Or -> "$or"
+  )
 }
