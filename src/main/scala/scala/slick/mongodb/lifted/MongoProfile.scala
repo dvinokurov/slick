@@ -40,7 +40,7 @@ trait MongoProfile extends RelationalProfile with MongoInsertInvokerComponent wi
       new LiftedMongoInvoker[T](queryCompiler.run(q.toNode).tree,session)
   }
 
-  trait SimpleQL extends super.SimpleQL with Implicits with MongoAliases
+  trait SimpleQL extends super.SimpleQL with Implicits
 
   // TODO: not required for MongoDB:
   /** Create a DDLInvoker -- this method should be implemented by drivers as needed */

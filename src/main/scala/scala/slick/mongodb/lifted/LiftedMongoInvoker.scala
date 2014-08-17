@@ -1,9 +1,8 @@
 package scala.slick.mongodb.lifted
 
 import com.mongodb.DBObject
-import com.mongodb.casbah.commons.MongoDBObject
+import com.mongodb.casbah.commons.Imports._
 
-import scala.collection.mutable
 import scala.slick.ast._
 import scala.slick.mongodb.MongoInvoker
 import scala.slick.mongodb.direct.{GetResult, MongoBackend, TypedMongoCollection}
@@ -115,28 +114,40 @@ class LiftedMongoInvoker[T](val queryNode: Node, val session: MongoBackend#Sessi
 //  Comprehension(from,where,groupBy,orderBy,select,fetch,offset)
     case Comprehension(from,where,None,orderBy,_,_,_) if from.size == 1 && where.isEmpty && orderBy.isEmpty => None
     case Comprehension(from,where,None,orderBy,_,_,_) if from.size == 1 && orderBy.isEmpty =>
-      val builder = MongoDBObject.newBuilder
-      where foreach {node => addApplyArgumentsToBuilder(node,builder)}
-      val q = new MongoDBObject(builder.result())
+      val q = where.foldLeft(new MongoDBObject) ((dbObject,node) => appendQueryParameterFromNode(node,dbObject))
       println(q)
       Some(q)
   }
 
-  def addApplyArgumentsToBuilder(node: Node,builder: mutable.Builder[(String,Any),DBObject]): Unit =  node match {
+  def appendQueryParameterFromNode(node: Node,query: MongoDBObject): MongoDBObject =  node match {
     case Apply(operator: Library.SqlOperator,arguments) if operator == Library.And =>
-      arguments.foreach{node => addApplyArgumentsToBuilder(node,builder)}
-    case Apply(operator: Library.SqlOperator,arguments) if supportedSQLOperators.contains(operator) =>
-      val attributeName = (arguments(0) match {case Path(an :: _)=>an}).toString
-      println(s"attributeName=$attributeName")
-      val value = arguments(1) match {case LiteralNode(v)=>v}
-      println(s"value=$value")
-      if(operator == Library.==){
-        builder += ((attributeName,value))
-      }else if(comparisonMongoOperators.contains(operator)) {
-        val comparisonOperator = SQLToMongoOperatorsMapping(operator)
-        builder += ((attributeName,MongoDBObject(comparisonOperator -> value)))
-      }
+      arguments.foldLeft(query){(dbObject,node) => appendQueryParameterFromNode(node,dbObject)}
+    case Apply(oNot: Library.SqlOperator,List(Apply(oEq: Library.SqlOperator,arguments))) if oNot == Library.Not && oEq == Library.== =>
+      val (attributeName,value) = parsedFunctionArguments(arguments)
+      query.++((attributeName,MongoDBObject($ne -> value)))
+    case Apply(operator: Library.SqlOperator,arguments) if operator == Library.== =>
+      val (attributeName,value) = parsedFunctionArguments(arguments)
+      query.++((attributeName,value))
+    case Apply(operator: Library.SqlOperator,arguments) if comparisonMongoOperators.contains(operator) =>
+      val (attributeName,value) = parsedFunctionArguments(arguments)
+      val comparisonOperator = SQLToMongoOperatorsMapping(operator)
+      addComparison(query,attributeName,MongoDBObject(comparisonOperator -> value))
       // TODO: add support for other operators here
+    case _ => ???
+  }
+  
+  def parsedFunctionArguments(arguments: Seq[Node]):(String,Any) = {
+    val attributeName = (arguments(0) match {case Path(an :: _)=>an}).toString
+    val value = arguments(1) match {case LiteralNode(v)=>v}
+    println(s"attributeName=$attributeName")
+    println(s"value=$value")
+    (attributeName,value)
+  }
+
+  def addComparison(dbObject: MongoDBObject,attributeName: String,value: MongoDBObject):MongoDBObject = dbObject.get(attributeName) match{
+    case None => dbObject += ((attributeName,value))
+    case Some(existing:DBObject) => dbObject += ((attributeName,{existing.putAll(value);existing}))
+    case Some(x) => println(s"$x of type ${x.getClass}"); ???
   }
 
   // TODO: finish pagination here - skip and limit must be extracted from nodes
@@ -148,6 +159,13 @@ class LiftedMongoInvoker[T](val queryNode: Node, val session: MongoBackend#Sessi
 //  }
 }
 object LiftedMongoInvoker{
+  val $ne = "$ne"
+  val $lt = "$lt"
+  val $lte = "$lte"
+  val $gt = "$gt"
+  val $gte = "$gte"
+  val $or = "$or"
+
   val supportedSQLOperators = List(
     Library.<,
     Library.<=,
@@ -159,10 +177,10 @@ object LiftedMongoInvoker{
   )
   val comparisonMongoOperators = List(Library.<,Library.<=,Library.>,Library.>=)
   val SQLToMongoOperatorsMapping = Map(
-    Library.< -> "$lt",
-    Library.<= -> "$lte",
-    Library.> -> "$gt",
-    Library.>= -> "$gte",
-    Library.Or -> "$or"
+    Library.< -> $lt,
+    Library.<= -> $lte,
+    Library.> -> $gt,
+    Library.>= -> $gte,
+    Library.Or -> $or
   )
 }
