@@ -122,9 +122,11 @@ class LiftedMongoInvoker[T](val queryNode: Node, val session: MongoBackend#Sessi
   def appendQueryParameterFromNode(node: Node,query: MongoDBObject): MongoDBObject =  node match {
     case Apply(operator: Library.SqlOperator,arguments) if operator == Library.And =>
       arguments.foldLeft(query){(dbObject,node) => appendQueryParameterFromNode(node,dbObject)}
-    case Apply(oNot: Library.SqlOperator,List(Apply(oEq: Library.SqlOperator,arguments))) if oNot == Library.Not && oEq == Library.== =>
-      val (attributeName,value) = parsedFunctionArguments(arguments)
-      query.++((attributeName,MongoDBObject($ne -> value)))
+    case Apply(operatorNot: Library.SqlOperator,arguments) if operatorNot == Library.Not && arguments.size == 1 => arguments(0) match {
+      case Apply(operatorEqual: Library.SqlOperator,arguments) if operatorEqual == Library.== =>
+        val (attributeName,value) = parsedFunctionArguments(arguments)
+        query.++((attributeName,MongoDBObject($ne -> value)))
+    }
     case Apply(operator: Library.SqlOperator,arguments) if operator == Library.== =>
       val (attributeName,value) = parsedFunctionArguments(arguments)
       query.++((attributeName,value))
