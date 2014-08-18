@@ -119,34 +119,70 @@ class LiftedMongoInvoker[T](val queryNode: Node, val session: MongoBackend#Sessi
       Some(q)
   }
 
+  // TODO: add support for other operators here
+  // TODO: does it make sense to use query builder instead of `query: MongoDBObject` here ?
   def appendQueryParameterFromNode(node: Node,query: MongoDBObject): MongoDBObject =  node match {
-    case Apply(operator: Library.SqlOperator,arguments) if operator == Library.And =>
+    case Apply(Library.And,arguments) =>
       arguments.foldLeft(query){(dbObject,node) => appendQueryParameterFromNode(node,dbObject)}
-    case Apply(operatorNot: Library.SqlOperator,arguments) if operatorNot == Library.Not && arguments.size == 1 => arguments(0) match {
-      case Apply(operatorEqual: Library.SqlOperator,arguments) if operatorEqual == Library.== =>
-        val (attributeName,value) = parsedFunctionArguments(arguments)
-        query.++((attributeName,MongoDBObject($ne -> value)))
-    }
-    case Apply(operator: Library.SqlOperator,arguments) if operator == Library.== =>
-      val (attributeName,value) = parsedFunctionArguments(arguments)
+    case Apply(Library.Or,arguments) =>
+      val orClauses = arguments.map{node => appendQueryParameterFromNode(node,new MongoDBObject)}
+      query.++(($or,orClauses))
+    case Apply(Library.==,arguments) =>
+      val (attributeName,value) = singleArgumentFunctionParameters(arguments)
       query.++((attributeName,value))
-    case Apply(operator: Library.SqlOperator,arguments) if comparisonMongoOperators.contains(operator) =>
-      val (attributeName,value) = parsedFunctionArguments(arguments)
+    case Apply(Library.In,arguments) =>
+      val (attributeName, parameters) = multipleArgumentFunctionParameters(arguments)
+      query.++((attributeName,MongoDBObject($in -> parameters)))
+    case Apply(operator: Library.SqlOperator,arguments) if supportedComparisonOperators.contains(operator) =>
+      val (attributeName,value) = singleArgumentFunctionParameters(arguments)
       val comparisonOperator = SQLToMongoOperatorsMapping(operator)
-      addComparison(query,attributeName,MongoDBObject(comparisonOperator -> value))
-      // TODO: add support for other operators here
-    case _ => ???
+      addComplexAttribute(query,attributeName,MongoDBObject(comparisonOperator -> value))
+    case Apply(operatorNot: Library.SqlOperator,nArguments) if operatorNot == Library.Not && nArguments.size == 1 =>
+      appendNegatedParameterFromNode(nArguments(0),query)
   }
-  
-  def parsedFunctionArguments(arguments: Seq[Node]):(String,Any) = {
+
+  def appendNegatedParameterFromNode(node: Node, query: DBObject):MongoDBObject = node match {
+    case Apply(Library.And,arguments) =>
+      val andClauses:MongoDBObject = appendQueryParameterFromNode(node,new MongoDBObject)
+      val negatedIterator = andClauses.underlying.iterator.asInstanceOf[Iterator[(String,Any)]].map { case (attributeName, value) => (attributeName, MongoDBObject($not -> value))}
+      val builder  = MongoDBList.newBuilder
+      for (document <- negatedIterator) builder += MongoDBObject(document)
+      val negated = builder.result()
+      query.++(($or,negated))
+    case Apply(Library.Or,arguments) =>
+      val orClauses = arguments.map{node => appendQueryParameterFromNode(node,new MongoDBObject)}
+      query.++(($nor,orClauses))
+    case Apply(Library.==,arguments) =>
+      val (attributeName,value) = singleArgumentFunctionParameters(arguments)
+      query.++((attributeName,MongoDBObject($ne -> value)))
+    case Apply(Library.In,arguments) =>
+      val (attributeName,parameters) = multipleArgumentFunctionParameters(arguments)
+      query.++((attributeName,MongoDBObject($nin -> parameters)))
+    case Apply(operator: Library.SqlOperator,arguments) if supportedComparisonOperators.contains(operator) =>
+      val (attributeName,value) = singleArgumentFunctionParameters(arguments)
+      val comparisonOperator = SQLToMongoOperatorsMapping(operator)
+      query.++((attributeName,MongoDBObject($not -> MongoDBObject(comparisonOperator -> value))))
+    case Apply(Library.Not,arguments) if arguments.size == 1 =>
+      appendQueryParameterFromNode(arguments(0),query)
+  }
+
+  def singleArgumentFunctionParameters(arguments: Seq[Node]):(String,Any) = {
     val attributeName = (arguments(0) match {case Path(an :: _)=>an}).toString
     val value = arguments(1) match {case LiteralNode(v)=>v}
     println(s"attributeName=$attributeName")
     println(s"value=$value")
     (attributeName,value)
   }
+  
+  def multipleArgumentFunctionParameters(arguments: Seq[Node]):(String,Seq[Any]) = {
+    val attributeName = (arguments(0) match {case Path(an :: _)=>an}).toString
+    val parameters = arguments(1).asInstanceOf[ProductNode].nodeChildren map {case LiteralNode(v)=>v}
+    println(s"attributeName=$attributeName")
+    println(s"value=$parameters")
+    (attributeName,parameters)
+  }
 
-  def addComparison(dbObject: MongoDBObject,attributeName: String,value: MongoDBObject):MongoDBObject = dbObject.get(attributeName) match{
+  def addComplexAttribute(dbObject: MongoDBObject,attributeName: String,value: MongoDBObject):MongoDBObject = dbObject.get(attributeName) match{
     case None => dbObject += ((attributeName,value))
     case Some(existing:DBObject) => dbObject += ((attributeName,{existing.putAll(value);existing}))
     case Some(x) => println(s"$x of type ${x.getClass}"); ???
@@ -167,22 +203,16 @@ object LiftedMongoInvoker{
   val $gt = "$gt"
   val $gte = "$gte"
   val $or = "$or"
+  val $in = "$in"
+  val $nin = "$nin"
+  val $nor = "$nor"
+  val $not = "$not"
 
-  val supportedSQLOperators = List(
-    Library.<,
-    Library.<=,
-    Library.>,
-    Library.>=,
-    Library.==,
-    Library.And,
-    Library.Or
-  )
-  val comparisonMongoOperators = List(Library.<,Library.<=,Library.>,Library.>=)
+  val supportedComparisonOperators = List(Library.<,Library.<=,Library.>,Library.>=)
   val SQLToMongoOperatorsMapping = Map(
     Library.< -> $lt,
     Library.<= -> $lte,
     Library.> -> $gt,
-    Library.>= -> $gte,
-    Library.Or -> $or
+    Library.>= -> $gte
   )
 }

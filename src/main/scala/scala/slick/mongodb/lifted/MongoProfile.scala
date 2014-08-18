@@ -21,6 +21,15 @@ trait MongoProfile extends RelationalProfile with MongoInsertInvokerComponent wi
   /** (Partially) compile an AST for insert operations */
   override def compileInsert(n: Node): CompiledInsert = n
 
+  /** The compiler used for queries */
+  override def queryCompiler: QueryCompiler = compiler ++ QueryCompiler.relationalPhases
+  /** The compiler used for updates */
+  override def updateCompiler: QueryCompiler = ???
+  /** The compiler used for deleting data */
+  override def deleteCompiler: QueryCompiler = ???
+  /** The compiler used for inserting data */
+  override def insertCompiler: QueryCompiler = ???
+
   trait ImplicitColumnTypes extends super.ImplicitColumnTypes{
     override implicit def charColumnType: BaseColumnType[Char] = ScalaBaseType.charType
     override implicit def longColumnType: BaseColumnType[Long] with NumericTypedType = ScalaBaseType.longType
@@ -45,23 +54,6 @@ trait MongoProfile extends RelationalProfile with MongoInsertInvokerComponent wi
   // TODO: not required for MongoDB:
   /** Create a DDLInvoker -- this method should be implemented by drivers as needed */
   override def createDDLInvoker(ddl: SchemaDescription): DDLInvoker = throw new UnsupportedOperationException("Mongo driver doesn't support ddl operations.")
-
-  /** The compiler used for queries */
-  override def queryCompiler: QueryCompiler = {
-//    compiler -
-//      Phase.expandRecords -
-//      Phase.flattenProjections -
-//      Phase.relabelUnions -
-//      Phase.pruneFields -
-//      Phase.assignTypes
-    compiler ++ QueryCompiler.relationalPhases
-  }
-  /** The compiler used for updates */
-  override def updateCompiler: QueryCompiler = ???
-  /** The compiler used for deleting data */
-  override def deleteCompiler: QueryCompiler = ???
-  /** The compiler used for inserting data */
-  override def insertCompiler: QueryCompiler = ???
 
   override type SchemaDescription = SchemaDescriptionDef
   override def buildSequenceSchemaDescription(seq: Sequence[_]): SchemaDescription = ???
