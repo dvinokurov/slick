@@ -157,7 +157,7 @@ trait ProductNode extends SimplyTypedNode { self =>
     case _ => false
   }
   def withComputedTypeNoRec: ProductNode = nodeBuildTypedNode(this, buildType)
-  protected def buildType: Type = ProductType(nodeChildren.map { ch =>
+  def buildType: Type = ProductType(nodeChildren.map { ch =>
     val t = ch.nodeType
     if(t == UnassignedType) throw new SlickException(s"ProductNode child $ch has UnassignedType")
     t
@@ -199,7 +199,7 @@ final case class StructNode(elements: IndexedSeq[(Symbol, Node)]) extends Produc
   protected[this] def nodeRebuildWithGenerators(gen: IndexedSeq[Symbol]): Node =
     copy(elements = (elements, gen).zipped.map((e, s) => (s, e._2)))
   override def withComputedTypeNoRec: StructNode = nodeBuildTypedNode(this, buildType)
-  override protected def buildType: Type = StructType(elements.map { case (s, n) =>
+  override def buildType: Type = StructType(elements.map { case (s, n) =>
     val t = n.nodeType
     if(t == UnassignedType) throw new SlickException(s"StructNode child $s has UnassignedType")
     (s, t)
